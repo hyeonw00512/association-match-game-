@@ -22,6 +22,11 @@ socket.on('connect', () => {
   });
 });
 socket.on('room-state', (next) => { state = next; render(); });
+socket.on('chat-message', (message) => {
+  if (!state) return;
+  state.chat = [...(state.chat || []), message].slice(-50);
+  renderChat();
+});
 socket.on('room-cancelled', ({ message }) => { state = null; sessionStorage.removeItem('association-room-code'); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note(message); });
 
 function note(message = '') { $('#notice').textContent = message; }
@@ -41,6 +46,18 @@ function call(event, data) {
 }
 function isHost() { return state?.hostId === myId; }
 function myPlayer() { return state?.players.find((p) => p.id === myId); }
+function renderChat() {
+  const panel = $('#chat-panel');
+  const visible = ['waiting', 'won'].includes(state?.status);
+  panel.classList.toggle('hidden', !visible);
+  if (!visible) return;
+  $('#chat-panel h2').textContent = state.status === 'waiting' ? '💬 대기방 채팅' : '🎈 함께 이야기하기';
+  const messages = state.chat || [];
+  $('#chat-messages').innerHTML = messages.length
+    ? messages.map((message) => `<div class="chat-message ${message.playerId === myId ? 'mine' : ''}"><small>${message.playerId === myId ? '나' : escapeHtml(message.name)}</small>${escapeHtml(message.message)}</div>`).join('')
+    : '<div class="chat-message"><small>아직 메시지가 없어요.</small>첫 소감을 남겨 보세요!</div>';
+  $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
+}
 
 function render() {
   if (!state) return;
@@ -82,6 +99,7 @@ function render() {
     $('#restart')?.addEventListener('click', () => call('restart-game').then(handle));
   }
   $('#history').innerHTML = state.history.map((h) => `<div class="history-row"><strong>${h.round}R ${h.matched ? '✓ 정답' : ''}</strong><span class="history-prompt">제시어: ${(h.prompt || []).map((item) => escapeHtml(item.word)).join(' · ')}</span><span class="history-answer">${h.entries.map((e) => `${e.playerId === myId ? '내 단어' : `${escapeHtml(e.name)}의 단어`}: ${escapeHtml(e.word)}`).join(' · ')}</span></div>`).join('');
+  renderChat();
 }
 function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
 function handle(result) { if (!result?.ok) note(result?.message || '오류가 발생했어요.'); else note(''); }
@@ -96,5 +114,6 @@ $('#copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(inviteLink); note('초대 링크가 복사됐어요. 친구에게 보내세요!'); }
   catch { note(`초대 링크: ${inviteLink}`); }
 });
+$('#chat-send').addEventListener('click', async () => { const r = await call('send-chat', { message: $('#chat-input').value }); handle(r); if (r.ok) $('#chat-input').value = ''; });
 $('#cancel-room').addEventListener('click', async () => { if (!confirm('이 방을 취소할까요? 참가자 모두 대기 화면으로 돌아갑니다.')) return; const r = await call('cancel-room'); handle(r); if (r.ok) { state = null; sessionStorage.removeItem('association-room-code'); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note('방을 취소했어요.'); } });
-document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { const active = document.activeElement?.id; if (active === 'name' || active === 'room-code') $('#join').click(); if (active === 'start-word') $('#start').click(); if (active === 'word') $('#submit').click(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { const active = document.activeElement?.id; if (active === 'name' || active === 'room-code') $('#join').click(); if (active === 'start-word') $('#start').click(); if (active === 'word') $('#submit').click(); if (active === 'chat-input') $('#chat-send').click(); } });

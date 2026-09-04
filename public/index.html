@@ -31,6 +31,11 @@
         </div>
         <div id="play-panel" class="panel hidden"><p class="prompt">이번에 떠오른 단어는?</p><input id="word" maxlength="30" placeholder="연상 단어 입력" /><button id="submit">비공개로 제출</button></div>
         <div id="result-panel" class="panel hidden"></div>
+        <section id="chat-panel" class="chat-panel hidden" aria-label="게임 종료 후 채팅">
+          <h2>🎈 함께 이야기하기</h2>
+          <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+          <div class="chat-compose"><input id="chat-input" maxlength="160" placeholder="게임 소감을 남겨 보세요" /><button id="chat-send" type="button">보내기</button></div>
+        </section>
         <div id="history" class="history"></div>
         <button id="cancel-room" class="danger hidden">방 취소하기</button>
       </section>

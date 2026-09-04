@@ -53,7 +53,8 @@ function publicState(room, reveal = false) {
     round: room.round,
     history: room.history,
     submittedIds: reveal ? [] : Object.keys(room.submissions),
-    result: room.result
+    result: room.result,
+    chat: room.chat
   };
 }
 
@@ -82,6 +83,7 @@ io.on('connection', (socket) => {
       history: [],
       submissions: {},
       result: null,
+      chat: [],
       usedTopics: []
     };
     rooms.set(code, room);
@@ -164,6 +166,10 @@ io.on('connection', (socket) => {
     if (!room.players.some((p) => p.id === socket.id)) return reply({ ok: false, message: '이 방의 참가자가 아니에요.' });
     if (!word) return reply({ ok: false, message: '연상 단어를 입력해 주세요.' });
     if (room.submissions[socket.id]) return reply({ ok: false, message: '이번 라운드에는 이미 제출했어요.' });
+    const usedBefore = [room.startWord, ...room.history.flatMap((round) => round.entries.map((entry) => entry.word))];
+    if (usedBefore.some((usedWord) => normalize(usedWord) === normalize(word))) {
+      return reply({ ok: false, message: '이미 나온 단어예요. 다른 단어를 입력해 주세요.' });
+    }
     room.submissions[socket.id] = word;
     if (Object.keys(room.submissions).length < room.players.length) {
       broadcast(room);
@@ -197,6 +203,7 @@ io.on('connection', (socket) => {
     room.submissions = {};
     room.result = null;
     room.usedTopics = [];
+    room.chat = [];
     broadcast(room);
     reply({ ok: true });
   });
@@ -206,6 +213,19 @@ io.on('connection', (socket) => {
     if (!room || socket.id !== room.hostId || room.status !== 'waiting') return reply({ ok: false, message: '대기 중인 방은 방장만 취소할 수 있어요.' });
     io.to(room.code).emit('room-cancelled', { message: '방장이 방을 취소했어요.' });
     rooms.delete(room.code);
+    reply({ ok: true });
+  });
+
+  socket.on('send-chat', ({ message }, reply) => {
+    const room = getRoomFor(socket);
+    const player = room?.players.find((item) => item.id === socket.id);
+    message = String(message || '').trim().replace(/\s+/g, ' ').slice(0, 160);
+    if (!room || !['waiting', 'won'].includes(room.status) || !player) return reply({ ok: false, message: '대기 중이거나 게임이 끝난 뒤에 채팅할 수 있어요.' });
+    if (!message) return reply({ ok: false, message: '메시지를 입력해 주세요.' });
+    const chatMessage = { id: `${Date.now()}-${socket.id}`, playerId: socket.id, name: player.name, message };
+    room.chat.push(chatMessage);
+    room.chat = room.chat.slice(-50);
+    io.to(room.code).emit('chat-message', chatMessage);
     reply({ ok: true });
   });
 
