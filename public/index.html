@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>마음이 통했어!</title>
+    <title>단어 연상 게임</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <main class="card">
-      <header><span class="spark">✦</span><h1>마음이 통했어!</h1><p>같은 주제에서 출발해, 같은 단어를 떠올려 보세요.</p></header>
+      <header><span class="spark">✦</span><h1>단어 연상 게임</h1><p>같은 주제에서 출발해, 같은 단어를 떠올려 보세요.</p></header>
       <section id="lobby" class="screen">
         <label>내 닉네임<input id="name" maxlength="16" placeholder="예: 민지" autocomplete="nickname" /></label>
         <label>최대 인원<select id="max-players"><option value="2">2명</option><option value="3">3명</option><option value="4" selected>4명</option><option value="5">5명</option><option value="6">6명</option><option value="7">7명</option><option value="8">8명</option></select></label>
         <button id="create">방 만들기</button>
         <div class="or">또는</div>
-        <label>방 코드<input id="room-code" maxlength="6" placeholder="ABC123" autocapitalize="characters" /></label>
+        <label>방 코드 또는 초대 링크<input id="room-code" placeholder="ABC123 또는 받은 초대 링크 붙여넣기" autocapitalize="characters" /></label>
         <button id="join" class="secondary">방 참가하기</button>
       </section>
       <section id="game" class="screen hidden">
