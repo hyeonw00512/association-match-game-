@@ -171,7 +171,10 @@ io.on('connection', (socket) => {
     }
     const entries = room.players.map((player) => ({ playerId: player.id, name: player.name, word: room.submissions[player.id] }));
     const matched = entries.every((entry) => normalize(entry.word) === normalize(entries[0].word));
-    room.history.push({ round: room.round, entries, matched });
+    const prompt = room.round === 1
+      ? [{ label: '시작 단어', word: room.startWord }]
+      : room.history[room.history.length - 1].entries.map((entry) => ({ label: entry.name, word: entry.word }));
+    room.history.push({ round: room.round, prompt, entries, matched });
     room.result = { entries, matched };
     room.submissions = {};
     if (matched) {

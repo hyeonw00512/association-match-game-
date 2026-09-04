@@ -6,6 +6,12 @@ const playerToken = sessionStorage.getItem('association-player-token') || crypto
 sessionStorage.setItem('association-player-token', playerToken);
 const categories = ['자연과 날씨', '음식과 음료', '동물과 식물', '장소와 여행', '일상과 물건', '취미와 놀이', '문화와 예술', '감정과 관계', '직업과 사회', '상상과 이야기'];
 categories.forEach((category) => { const option = document.createElement('option'); option.value = category; option.textContent = category; $('#category').append(option); });
+const invitedRoomCode = new URLSearchParams(location.search).get('room')?.trim().toUpperCase();
+if (/^[A-Z0-9]{6}$/.test(invitedRoomCode || '')) {
+  $('#room-code').value = invitedRoomCode;
+  $('#join').textContent = '초대 방 참가하기';
+  note(`방 코드 ${invitedRoomCode} 초대를 받았어요. 닉네임을 입력해 참가하세요.`);
+}
 
 socket.on('connect', () => {
   myId = socket.id;
@@ -52,17 +58,22 @@ function render() {
     if (enoughPlayers && isHost()) $('#start-panel').classList.remove('hidden');
   } else if (state.status === 'playing') {
     const mineSubmitted = state.submittedIds.includes(myId);
-    const prompt = state.round === 1 ? `시작 단어: “${state.startWord}”` : `${state.round - 1}R 단어들을 보고 연상해 보세요.`;
-    status.textContent = mineSubmitted ? `제출 완료! 다른 ${state.players.length - state.submittedIds.length}명의 단어를 기다리는 중이에요.` : `${prompt} — 모든 사람이 제출하기 전까지 서로 볼 수 없어요.`;
+    if (state.round === 1) {
+      status.innerHTML = `<span class="topic-label">시작 단어</span><strong class="topic-word">“${escapeHtml(state.startWord)}”</strong><span class="status-guide">${mineSubmitted ? '제출 완료! 다른 참가자의 단어를 기다리는 중이에요.' : '모든 사람이 제출하기 전까지 서로의 단어를 볼 수 없어요.'}</span>`;
+    } else {
+      status.innerHTML = mineSubmitted
+        ? '<span class="status-guide">제출 완료! 다른 참가자의 단어를 기다리는 중이에요.</span>'
+        : `<span class="status-guide">${state.round - 1}R 단어들을 보고 다음 단어를 떠올려 보세요.</span>`;
+    }
     if (!mineSubmitted) $('#play-panel').classList.remove('hidden');
   } else if (state.status === 'won') {
     const { entries, matched } = state.result;
-    status.textContent = '🎉 마음이 통했어요! 모두의 단어가 일치합니다.';
+    status.textContent = '';
     const panel = $('#result-panel'); panel.classList.remove('hidden');
-    panel.innerHTML = `<div class="result-words">${entries.map((e) => `<div><small>${e.playerId === myId ? '내 단어' : `${escapeHtml(e.name)}의 단어`}</small><b>${escapeHtml(e.word)}</b></div>`).join('')}</div>` + (isHost() ? '<button id="restart">새 게임</button>' : '<p>방장이 새 게임을 시작할 수 있어요.</p>');
+    panel.innerHTML = `<div class="win-card"><div>🎉</div><h2>${state.round}R만에 마음이 통했어요!</h2><p>모든 참가자가 같은 단어를 선택했습니다.</p><div class="result-words">${entries.map((e) => `<div><small>${e.playerId === myId ? '내 단어' : `${escapeHtml(e.name)}의 단어`}</small><b>${escapeHtml(e.word)}</b></div>`).join('')}</div>${isHost() ? '<button id="restart">새 게임</button>' : '<p>방장이 새 게임을 시작할 수 있어요.</p>'}</div>`;
     $('#restart')?.addEventListener('click', () => call('restart-game').then(handle));
   }
-  $('#history').innerHTML = state.history.map((h) => `<div class="history-row"><strong>${h.round}R ${h.matched ? '✓' : ''}</strong><span>${h.entries.map((e) => `${e.playerId === myId ? '내 단어' : `${escapeHtml(e.name)}의 단어`}: ${escapeHtml(e.word)}`).join(' · ')}</span></div>`).join('');
+  $('#history').innerHTML = state.history.map((h) => `<div class="history-row"><strong>${h.round}R ${h.matched ? '✓ 정답' : ''}</strong><span class="history-prompt">제시어: ${(h.prompt || []).map((item) => escapeHtml(item.word)).join(' · ')}</span><span class="history-answer">${h.entries.map((e) => `${e.playerId === myId ? '내 단어' : `${escapeHtml(e.name)}의 단어`}: ${escapeHtml(e.word)}`).join(' · ')}</span></div>`).join('');
 }
 function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
 function handle(result) { if (!result?.ok) note(result?.message || '오류가 발생했어요.'); else note(''); }
@@ -72,6 +83,10 @@ $('#join').addEventListener('click', async () => { const r = await call('join-ro
 $('#start').addEventListener('click', async () => { const r = await call('set-start-word', { word: $('#start-word').value }); handle(r); if (r.ok) $('#start-word').value = ''; });
 $('#random').addEventListener('click', async () => { const r = await call('pick-random-topic', { category: $('#category').value }); handle(r); if (r.ok) { $('#start-word').value = r.word; note(`“${r.word}” (${r.category}) 주제가 뽑혔어요. 게임 시작을 눌러 주세요.`); } });
 $('#submit').addEventListener('click', async () => { const r = await call('submit-word', { word: $('#word').value }); handle(r); if (r.ok) $('#word').value = ''; });
-$('#copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(state.code); note('방 코드가 복사됐어요.'); } catch { note(`방 코드: ${state.code}`); } });
+$('#copy').addEventListener('click', async () => {
+  const inviteLink = `${location.origin}${location.pathname}?room=${encodeURIComponent(state.code)}`;
+  try { await navigator.clipboard.writeText(inviteLink); note('초대 링크가 복사됐어요. 친구에게 보내세요!'); }
+  catch { note(`초대 링크: ${inviteLink}`); }
+});
 $('#cancel-room').addEventListener('click', async () => { if (!confirm('이 방을 취소할까요? 참가자 모두 대기 화면으로 돌아갑니다.')) return; const r = await call('cancel-room'); handle(r); if (r.ok) { state = null; sessionStorage.removeItem('association-room-code'); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note('방을 취소했어요.'); } });
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { const active = document.activeElement?.id; if (active === 'name' || active === 'room-code') $('#join').click(); if (active === 'start-word') $('#start').click(); if (active === 'word') $('#submit').click(); } });
