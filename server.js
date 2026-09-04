@@ -116,10 +116,12 @@ io.on('connection', (socket) => {
     const player = room?.players.find((item) => item.token === token);
     if (!player) return reply({ ok: false });
     const previousSocketId = player.id;
+    const previousSubmission = room.submissions[previousSocketId];
     delete room.submissions[previousSocketId];
     player.id = socket.id;
     player.connected = true;
     if (room.hostId === previousSocketId) room.hostId = socket.id;
+    if (previousSubmission) room.submissions[socket.id] = previousSubmission;
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.playerToken = token;
@@ -235,7 +237,6 @@ io.on('connection', (socket) => {
     const player = room.players.find((p) => p.id === socket.id);
     if (!player) return;
     player.connected = false;
-    delete room.submissions[socket.id];
     setTimeout(() => {
       const currentRoom = rooms.get(room.code);
       const absentPlayer = currentRoom?.players.find((p) => p.token === player.token);

@@ -83,12 +83,13 @@ function render() {
     if (enoughPlayers && isHost()) $('#start-panel').classList.remove('hidden');
   } else if (state.status === 'playing') {
     const mineSubmitted = state.submittedIds.includes(myId);
+    const submissionCount = `<span class="submission-count">제출 현황 ${state.submittedIds.length} / ${state.players.length}명</span>`;
     if (state.round === 1) {
-      status.innerHTML = `<span class="topic-label">시작 단어</span><strong class="topic-word">“${escapeHtml(state.startWord)}”</strong><span class="status-guide">${mineSubmitted ? '제출 완료! 다른 참가자의 단어를 기다리는 중이에요.' : '모든 사람이 제출하기 전까지 서로의 단어를 볼 수 없어요.'}</span>`;
+      status.innerHTML = `<span class="topic-label">시작 단어</span><strong class="topic-word">“${escapeHtml(state.startWord)}”</strong>${submissionCount}<span class="status-guide">${mineSubmitted ? '제출 완료! 다른 참가자의 단어를 기다리는 중이에요.' : '모든 사람이 제출하기 전까지 서로의 단어를 볼 수 없어요.'}</span>`;
     } else {
       status.innerHTML = mineSubmitted
-        ? '<span class="status-guide">제출 완료! 다른 참가자의 단어를 기다리는 중이에요.</span>'
-        : `<span class="status-guide">${state.round - 1}R 단어들을 보고 다음 단어를 떠올려 보세요.</span>`;
+        ? `${submissionCount}<span class="status-guide">제출 완료! 다른 참가자의 단어를 기다리는 중이에요.</span>`
+        : `${submissionCount}<span class="status-guide">${state.round - 1}R 단어들을 보고 다음 단어를 떠올려 보세요.</span>`;
     }
     if (!mineSubmitted) $('#play-panel').classList.remove('hidden');
   } else if (state.status === 'won') {
