@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>마음이 통했어!</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header><span class="spark">✦</span><h1>마음이 통했어!</h1><p>같은 주제에서 출발해, 같은 단어를 떠올려 보세요.</p></header>
+      <section id="lobby" class="screen">
+        <label>내 닉네임<input id="name" maxlength="16" placeholder="예: 민지" autocomplete="nickname" /></label>
+        <label>최대 인원<select id="max-players"><option value="2">2명</option><option value="3">3명</option><option value="4" selected>4명</option><option value="5">5명</option><option value="6">6명</option><option value="7">7명</option><option value="8">8명</option></select></label>
+        <button id="create">방 만들기</button>
+        <div class="or">또는</div>
+        <label>방 코드<input id="room-code" maxlength="6" placeholder="ABC123" autocapitalize="characters" /></label>
+        <button id="join" class="secondary">방 참가하기</button>
+      </section>
+      <section id="game" class="screen hidden">
+        <div class="topline"><span id="round-label">대기 중</span><button id="copy" class="link-button">방 코드 복사</button></div>
+        <div id="code-display" class="code-display"></div>
+        <div id="room-info" class="room-info"></div>
+        <div id="status" class="status"></div>
+        <div id="round-clue" class="round-clue hidden"></div>
+        <div id="start-panel" class="panel hidden">
+          <p>시작 단어를 정해 주세요.</p>
+          <div class="random-controls"><select id="category"><option value="">전체 카테고리 랜덤</option></select><button id="random" class="secondary" type="button">랜덤 주제 뽑기</button></div>
+          <input id="start-word" maxlength="30" placeholder="예: 바다" />
+          <button id="start">게임 시작</button>
+        </div>
+        <div id="play-panel" class="panel hidden"><p class="prompt">이번에 떠오른 단어는?</p><input id="word" maxlength="30" placeholder="연상 단어 입력" /><button id="submit">비공개로 제출</button></div>
+        <div id="result-panel" class="panel hidden"></div>
+        <div id="history" class="history"></div>
+        <button id="cancel-room" class="danger hidden">방 취소하기</button>
+      </section>
+      <p id="notice" class="notice" role="alert"></p>
+    </main>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

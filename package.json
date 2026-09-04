@@ -1,0 +1,14 @@
+{
+  "name": "association-match-game",
+  "version": "1.0.0",
+  "description": "Two-player real-time association word game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
