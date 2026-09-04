@@ -108,7 +108,14 @@ $('#create').addEventListener('click', async () => { const r = await call('creat
 $('#join').addEventListener('click', async () => { const r = await call('join-room', { name: $('#name').value, code: roomCodeFrom($('#room-code').value), token: playerToken }); handle(r); if (r.ok) { sessionStorage.setItem('association-room-code', r.state.code); state = r.state; render(); } });
 $('#start').addEventListener('click', async () => { const r = await call('set-start-word', { word: $('#start-word').value }); handle(r); if (r.ok) $('#start-word').value = ''; });
 $('#random').addEventListener('click', async () => { const r = await call('pick-random-topic', { category: $('#category').value }); handle(r); if (r.ok) { $('#start-word').value = r.word; note(`“${r.word}” (${r.category}) 주제가 뽑혔어요. 게임 시작을 눌러 주세요.`); } });
-$('#submit').addEventListener('click', async () => { const r = await call('submit-word', { word: $('#word').value }); handle(r); if (r.ok) $('#word').value = ''; });
+$('#submit').addEventListener('click', async () => {
+  const r = await call('submit-word', { word: $('#word').value });
+  if (!r?.ok) { $('#word-error').textContent = r?.message || '단어를 제출하지 못했어요.'; return; }
+  $('#word-error').textContent = '';
+  $('#word').value = '';
+  note('');
+});
+$('#word').addEventListener('input', () => { $('#word-error').textContent = ''; });
 $('#copy').addEventListener('click', async () => {
   const inviteLink = `${location.origin}${location.pathname}?room=${encodeURIComponent(state.code)}`;
   try { await navigator.clipboard.writeText(inviteLink); note('초대 링크가 복사됐어요. 친구에게 보내세요!'); }
