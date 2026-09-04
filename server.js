@@ -33,6 +33,10 @@ function cleanMaxPlayers(value) {
   return Number.isInteger(count) && count >= 2 && count <= 8 ? count : 4;
 }
 
+function cleanToken(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 80);
+}
+
 function normalize(value) {
   return value.replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
 }
@@ -62,14 +66,15 @@ function getRoomFor(socket) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('create-room', ({ name, maxPlayers }, reply) => {
+  socket.on('create-room', ({ name, maxPlayers, token }, reply) => {
     name = cleanName(name);
+    token = cleanToken(token) || socket.id;
     if (!name) return reply({ ok: false, message: '닉네임을 입력해 주세요.' });
     const code = roomCode();
     const room = {
       code,
       hostId: socket.id,
-      players: [{ id: socket.id, name }],
+      players: [{ id: socket.id, name, token, connected: true }],
       maxPlayers: cleanMaxPlayers(maxPlayers),
       status: 'waiting',
       startWord: '',
@@ -82,20 +87,40 @@ io.on('connection', (socket) => {
     rooms.set(code, room);
     socket.join(code);
     socket.data.roomCode = code;
+    socket.data.playerToken = token;
     reply({ ok: true, state: publicState(room) });
   });
 
-  socket.on('join-room', ({ code, name }, reply) => {
+  socket.on('join-room', ({ code, name, token }, reply) => {
     code = String(code || '').trim().toUpperCase();
     name = cleanName(name);
+    token = cleanToken(token) || socket.id;
     const room = rooms.get(code);
     if (!name) return reply({ ok: false, message: '닉네임을 입력해 주세요.' });
     if (!room) return reply({ ok: false, message: '존재하지 않는 방 코드예요.' });
     if (room.players.length >= room.maxPlayers) return reply({ ok: false, message: '이 방은 이미 가득 찼어요.' });
     if (room.status !== 'waiting') return reply({ ok: false, message: '이미 진행 중인 방이에요.' });
-    room.players.push({ id: socket.id, name });
+    room.players.push({ id: socket.id, name, token, connected: true });
     socket.join(code);
     socket.data.roomCode = code;
+    socket.data.playerToken = token;
+    broadcast(room);
+    reply({ ok: true, state: publicState(room) });
+  });
+
+  socket.on('rejoin-room', ({ code, token }, reply) => {
+    const room = rooms.get(String(code || '').trim().toUpperCase());
+    token = cleanToken(token);
+    const player = room?.players.find((item) => item.token === token);
+    if (!player) return reply({ ok: false });
+    const previousSocketId = player.id;
+    delete room.submissions[previousSocketId];
+    player.id = socket.id;
+    player.connected = true;
+    if (room.hostId === previousSocketId) room.hostId = socket.id;
+    socket.join(room.code);
+    socket.data.roomCode = room.code;
+    socket.data.playerToken = token;
     broadcast(room);
     reply({ ok: true, state: publicState(room) });
   });
@@ -148,19 +173,14 @@ io.on('connection', (socket) => {
     const matched = entries.every((entry) => normalize(entry.word) === normalize(entries[0].word));
     room.history.push({ round: room.round, entries, matched });
     room.result = { entries, matched };
-    room.status = matched ? 'won' : 'revealed';
     room.submissions = {};
+    if (matched) {
+      room.status = 'won';
+    } else {
+      room.round += 1;
+      room.status = 'playing';
+    }
     io.to(room.code).emit('room-state', publicState(room, true));
-    reply({ ok: true });
-  });
-
-  socket.on('next-round', (reply) => {
-    const room = getRoomFor(socket);
-    if (!room || room.status !== 'revealed') return reply({ ok: false, message: '다음 라운드를 시작할 수 없어요.' });
-    room.round += 1;
-    room.status = 'playing';
-    room.result = null;
-    broadcast(room);
     reply({ ok: true });
   });
 
@@ -189,17 +209,25 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const room = getRoomFor(socket);
     if (!room) return;
-    room.players = room.players.filter((p) => p.id !== socket.id);
+    const player = room.players.find((p) => p.id === socket.id);
+    if (!player) return;
+    player.connected = false;
     delete room.submissions[socket.id];
-    if (room.players.length === 0) return rooms.delete(room.code);
-    room.hostId = room.players[0].id;
-    room.status = 'waiting';
-    room.startWord = '';
-    room.round = 0;
-    room.history = [];
-    room.submissions = {};
-    room.result = null;
-    broadcast(room);
+    setTimeout(() => {
+      const currentRoom = rooms.get(room.code);
+      const absentPlayer = currentRoom?.players.find((p) => p.token === player.token);
+      if (!currentRoom || !absentPlayer || absentPlayer.connected) return;
+      currentRoom.players = currentRoom.players.filter((p) => p.token !== player.token);
+      if (currentRoom.players.length === 0) return rooms.delete(currentRoom.code);
+      currentRoom.hostId = currentRoom.players[0].id;
+      currentRoom.status = 'waiting';
+      currentRoom.startWord = '';
+      currentRoom.round = 0;
+      currentRoom.history = [];
+      currentRoom.submissions = {};
+      currentRoom.result = null;
+      broadcast(currentRoom);
+    }, 30000);
   });
 });
 
