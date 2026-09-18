@@ -2,6 +2,7 @@ const socket = io();
 const $ = (selector) => document.querySelector(selector);
 let state = null;
 let myId = null;
+let isSpectator = false;
 const playerToken = sessionStorage.getItem('association-player-token') || crypto.randomUUID();
 sessionStorage.setItem('association-player-token', playerToken);
 const categories = ['자연과 날씨', '음식과 음료', '동물과 식물', '장소와 여행', '일상과 물건', '취미와 놀이', '문화와 예술', '감정과 관계', '직업과 사회', '상상과 이야기'];
@@ -91,7 +92,7 @@ function render() {
         ? `${submissionCount}<span class="status-guide">제출 완료! 다른 참가자의 단어를 기다리는 중이에요.</span>`
         : `${submissionCount}<span class="status-guide">${state.round - 1}R 단어들을 보고 다음 단어를 떠올려 보세요.</span>`;
     }
-    if (!mineSubmitted) $('#play-panel').classList.remove('hidden');
+    if (!mineSubmitted && !isSpectator) $('#play-panel').classList.remove('hidden');
   } else if (state.status === 'won') {
     const { entries, matched } = state.result;
     status.textContent = '';
@@ -107,6 +108,7 @@ function handle(result) { if (!result?.ok) note(result?.message || '오류가 �
 
 $('#create').addEventListener('click', async () => { const r = await call('create-room', { name: $('#name').value, maxPlayers: $('#max-players').value, token: playerToken }); handle(r); if (r.ok) { sessionStorage.setItem('association-room-code', r.state.code); state = r.state; render(); } });
 $('#join').addEventListener('click', async () => { const r = await call('join-room', { name: $('#name').value, code: roomCodeFrom($('#room-code').value), token: playerToken }); handle(r); if (r.ok) { sessionStorage.setItem('association-room-code', r.state.code); state = r.state; render(); } });
+$('#spectate').addEventListener('click', async () => { const r = await call('spectate-room', { code: roomCodeFrom($('#room-code').value) }); handle(r); if (r.ok) { isSpectator = true; sessionStorage.removeItem('association-room-code'); state = r.state; render(); } });
 $('#start').addEventListener('click', async () => { const r = await call('set-start-word', { word: $('#start-word').value }); handle(r); if (r.ok) $('#start-word').value = ''; });
 $('#random').addEventListener('click', async () => { const r = await call('pick-random-topic', { category: $('#category').value }); handle(r); if (r.ok) { $('#start-word').value = r.word; note(`“${r.word}” (${r.category}) 주제가 뽑혔어요. 게임 시작을 눌러 주세요.`); } });
 $('#submit').addEventListener('click', async () => {

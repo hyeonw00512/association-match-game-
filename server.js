@@ -110,6 +110,15 @@ io.on('connection', (socket) => {
     reply({ ok: true, state: publicState(room) });
   });
 
+  socket.on('spectate-room', ({ code }, reply) => {
+    const room = rooms.get(String(code || '').trim().toUpperCase());
+    if (!room) return reply({ ok: false, message: '존재하지 않는 방 코드예요.' });
+    socket.join(room.code);
+    socket.data.roomCode = room.code;
+    socket.data.isSpectator = true;
+    reply({ ok: true, state: publicState(room), isSpectator: true });
+  });
+
   socket.on('rejoin-room', ({ code, token }, reply) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     token = cleanToken(token);
@@ -256,4 +265,23 @@ io.on('connection', (socket) => {
 });
 
 const port = process.env.PORT || 3000;
+app.get('/api/platform/rooms', (_request, response) => response.json({
+  version: 1,
+  gameId: 'echo-words',
+  updatedAt: new Date().toISOString(),
+  capabilities: { canSpectate: true, canReserveNextRound: false },
+  rooms: [...rooms.values()].map((room) => ({
+    roomCode: room.code,
+    hostNickname: room.players.find((player) => player.id === room.hostId)?.name || '알 수 없음',
+    playerCount: room.players.length,
+    maxPlayers: room.maxPlayers,
+    spectatorCount: 0,
+    status: room.status === 'waiting' ? 'WAITING' : room.status === 'playing' ? 'PLAYING' : 'FINISHED',
+    requiresPassword: false,
+    canJoin: room.status === 'waiting' && room.players.length < room.maxPlayers,
+    canSpectate: true,
+    canReserveNextRound: false,
+    joinUrl: `https://association-match-game.onrender.com/?room=${room.code}`
+  }))
+}));
 server.listen(port, '0.0.0.0', () => console.log(`Game server: http://localhost:${port}`));
