@@ -227,6 +227,24 @@ io.on('connection', (socket) => {
     reply({ ok: true });
   });
 
+  socket.on('leave-room', (reply) => {
+    const room = getRoomFor(socket);
+    if (!room) return reply({ ok: true });
+    const player = room.players.find((item) => item.id === socket.id);
+    socket.leave(room.code);
+    socket.data.roomCode = undefined;
+    if (!player) return reply({ ok: true });
+    room.players = room.players.filter((item) => item.id !== socket.id);
+    delete room.submissions[socket.id];
+    if (room.players.length === 0) rooms.delete(room.code);
+    else {
+      room.hostId = room.hostId === socket.id ? room.players[0].id : room.hostId;
+      if (room.status === 'playing') { room.status = 'waiting'; room.startWord = ''; room.round = 0; room.history = []; room.submissions = {}; room.result = null; }
+      broadcast(room);
+    }
+    reply({ ok: true });
+  });
+
   socket.on('send-chat', ({ message }, reply) => {
     const room = getRoomFor(socket);
     const player = room?.players.find((item) => item.id === socket.id);
