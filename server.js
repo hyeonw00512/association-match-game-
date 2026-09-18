@@ -84,12 +84,14 @@ io.on('connection', (socket) => {
       submissions: {},
       result: null,
       chat: [],
+      spectators: new Set(),
       usedTopics: []
     };
     rooms.set(code, room);
     socket.join(code);
     socket.data.roomCode = code;
     socket.data.playerToken = token;
+    socket.data.isSpectator = false;
     reply({ ok: true, state: publicState(room) });
   });
 
@@ -106,6 +108,7 @@ io.on('connection', (socket) => {
     socket.join(code);
     socket.data.roomCode = code;
     socket.data.playerToken = token;
+    socket.data.isSpectator = false;
     broadcast(room);
     reply({ ok: true, state: publicState(room) });
   });
@@ -116,6 +119,8 @@ io.on('connection', (socket) => {
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.isSpectator = true;
+    room.spectators.add(socket.id);
+    broadcast(room);
     reply({ ok: true, state: publicState(room), isSpectator: true });
   });
 
@@ -134,6 +139,7 @@ io.on('connection', (socket) => {
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.playerToken = token;
+    socket.data.isSpectator = false;
     broadcast(room);
     reply({ ok: true, state: publicState(room) });
   });
@@ -233,6 +239,12 @@ io.on('connection', (socket) => {
     const player = room.players.find((item) => item.id === socket.id);
     socket.leave(room.code);
     socket.data.roomCode = undefined;
+    if (socket.data.isSpectator) {
+      room.spectators.delete(socket.id);
+      socket.data.isSpectator = false;
+      broadcast(room);
+      return reply({ ok: true });
+    }
     if (!player) return reply({ ok: true });
     room.players = room.players.filter((item) => item.id !== socket.id);
     delete room.submissions[socket.id];
@@ -261,6 +273,11 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const room = getRoomFor(socket);
     if (!room) return;
+    if (socket.data.isSpectator) {
+      room.spectators.delete(socket.id);
+      broadcast(room);
+      return;
+    }
     const player = room.players.find((p) => p.id === socket.id);
     if (!player) return;
     player.connected = false;
@@ -293,7 +310,7 @@ app.get('/api/platform/rooms', (_request, response) => response.json({
     hostNickname: room.players.find((player) => player.id === room.hostId)?.name || '알 수 없음',
     playerCount: room.players.length,
     maxPlayers: room.maxPlayers,
-    spectatorCount: 0,
+    spectatorCount: room.spectators?.size || 0,
     status: room.status === 'waiting' ? 'WAITING' : room.status === 'playing' ? 'PLAYING' : 'FINISHED',
     requiresPassword: false,
     canJoin: room.status === 'waiting' && room.players.length < room.maxPlayers,
