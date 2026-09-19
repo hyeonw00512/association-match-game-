@@ -113,13 +113,15 @@ io.on('connection', (socket) => {
     reply({ ok: true, state: publicState(room) });
   });
 
-  socket.on('spectate-room', ({ code }, reply) => {
+  socket.on('spectate-room', ({ code, name }, reply) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     if (!room) return reply({ ok: false, message: '존재하지 않는 방 코드예요.' });
+    name = cleanName(name) || '관전자';
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.isSpectator = true;
-    room.spectators.add(socket.id);
+    socket.data.spectatorName = name;
+    room.spectators.set(socket.id, { name });
     broadcast(room);
     reply({ ok: true, state: publicState(room), isSpectator: true });
   });
@@ -261,9 +263,9 @@ io.on('connection', (socket) => {
     const room = getRoomFor(socket);
     const player = room?.players.find((item) => item.id === socket.id);
     message = String(message || '').trim().replace(/\s+/g, ' ').slice(0, 160);
-    if (!room || !['waiting', 'won'].includes(room.status) || !player) return reply({ ok: false, message: '대기 중이거나 게임이 끝난 뒤에 채팅할 수 있어요.' });
+    if (!room || !['waiting', 'won'].includes(room.status) || (!player && !socket.data.isSpectator)) return reply({ ok: false, message: '대기 중이거나 게임이 끝난 뒤에 채팅할 수 있어요.' });
     if (!message) return reply({ ok: false, message: '메시지를 입력해 주세요.' });
-    const chatMessage = { id: `${Date.now()}-${socket.id}`, playerId: socket.id, name: player.name, message };
+    const chatMessage = { id: `${Date.now()}-${socket.id}`, playerId: socket.id, name: player ? player.name : `${socket.data.spectatorName || '관전자'} (관전)`, message };
     room.chat.push(chatMessage);
     room.chat = room.chat.slice(-50);
     io.to(room.code).emit('chat-message', chatMessage);
