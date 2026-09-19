@@ -4,6 +4,7 @@ let state = null;
 let myId = null;
 let isSpectator = false;
 const playerToken = sessionStorage.getItem('association-player-token') || crypto.randomUUID();
+const spectatorSessionKey = 'association-spectator-session';
 sessionStorage.setItem('association-player-token', playerToken);
 const categories = ['자연과 날씨', '음식과 음료', '동물과 식물', '장소와 여행', '일상과 물건', '취미와 놀이', '문화와 예술', '감정과 관계', '직업과 사회', '상상과 이야기'];
 categories.forEach((category) => { const option = document.createElement('option'); option.value = category; option.textContent = category; $('#category').append(option); });
@@ -20,6 +21,11 @@ socket.on('connect', () => {
   if (savedRoomCode) socket.emit('rejoin-room', { code: savedRoomCode, token: playerToken }, (result) => {
     if (result?.ok) { state = result.state; render(); }
     else sessionStorage.removeItem('association-room-code');
+  });
+  const spectatorSession = JSON.parse(sessionStorage.getItem(spectatorSessionKey) || 'null');
+  if (!savedRoomCode && spectatorSession) socket.emit('spectate-room', spectatorSession, (result) => {
+    if (result?.ok) { isSpectator = true; state = result.state; render(); }
+    else sessionStorage.removeItem(spectatorSessionKey);
   });
 });
 socket.on('room-state', (next) => { state = next; render(); });
@@ -108,7 +114,7 @@ function handle(result) { if (!result?.ok) note(result?.message || '오류가 �
 
 $('#create').addEventListener('click', async () => { const r = await call('create-room', { name: $('#name').value, maxPlayers: $('#max-players').value, token: playerToken }); handle(r); if (r.ok) { sessionStorage.setItem('association-room-code', r.state.code); state = r.state; render(); } });
 $('#join').addEventListener('click', async () => { const r = await call('join-room', { name: $('#name').value, code: roomCodeFrom($('#room-code').value), token: playerToken }); handle(r); if (r.ok) { sessionStorage.setItem('association-room-code', r.state.code); state = r.state; render(); } });
-$('#spectate').addEventListener('click', async () => { const r = await call('spectate-room', { code: roomCodeFrom($('#room-code').value), name: $('#name').value }); handle(r); if (r.ok) { isSpectator = true; sessionStorage.removeItem('association-room-code'); state = r.state; render(); } });
+$('#spectate').addEventListener('click', async () => { const payload = { code: roomCodeFrom($('#room-code').value), name: $('#name').value }; const r = await call('spectate-room', payload); handle(r); if (r.ok) { isSpectator = true; sessionStorage.removeItem('association-room-code'); sessionStorage.setItem(spectatorSessionKey, JSON.stringify({ ...payload, spectatorToken: r.spectatorToken })); state = r.state; render(); } });
 $('#start').addEventListener('click', async () => { const r = await call('set-start-word', { word: $('#start-word').value }); handle(r); if (r.ok) $('#start-word').value = ''; });
 $('#random').addEventListener('click', async () => { const r = await call('pick-random-topic', { category: $('#category').value }); handle(r); if (r.ok) { $('#start-word').value = r.word; note(`“${r.word}” (${r.category}) 주제가 뽑혔어요. 게임 시작을 눌러 주세요.`); } });
 $('#submit').addEventListener('click', async () => {
@@ -126,5 +132,5 @@ $('#copy').addEventListener('click', async () => {
 });
 $('#chat-send').addEventListener('click', async () => { const r = await call('send-chat', { message: $('#chat-input').value }); handle(r); if (r.ok) $('#chat-input').value = ''; });
 $('#cancel-room').addEventListener('click', async () => { if (!confirm('이 방을 취소할까요? 참가자 모두 대기 화면으로 돌아갑니다.')) return; const r = await call('cancel-room'); handle(r); if (r.ok) { state = null; sessionStorage.removeItem('association-room-code'); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note('방을 취소했어요.'); } });
-$('#leave-room').addEventListener('click', async () => { if (!confirm('방에서 나갈까요?')) return; const r = await call('leave-room'); if (!r?.ok) return handle(r); state = null; isSpectator = false; sessionStorage.removeItem('association-room-code'); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note('방에서 나왔어요.'); });
+$('#leave-room').addEventListener('click', async () => { if (!confirm('방에서 나갈까요?')) return; const r = await call('leave-room'); if (!r?.ok) return handle(r); state = null; isSpectator = false; sessionStorage.removeItem('association-room-code'); sessionStorage.removeItem(spectatorSessionKey); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note('방에서 나왔어요.'); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { const active = document.activeElement?.id; if (active === 'name' || active === 'room-code') $('#join').click(); if (active === 'start-word') $('#start').click(); if (active === 'word') $('#submit').click(); if (active === 'chat-input') $('#chat-send').click(); } });

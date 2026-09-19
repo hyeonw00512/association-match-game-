@@ -113,17 +113,20 @@ io.on('connection', (socket) => {
     reply({ ok: true, state: publicState(room) });
   });
 
-  socket.on('spectate-room', ({ code, name }, reply) => {
+  socket.on('spectate-room', ({ code, name, spectatorToken }, reply) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     if (!room) return reply({ ok: false, message: '존재하지 않는 방 코드예요.' });
     name = cleanName(name) || '관전자';
+    spectatorToken = cleanToken(spectatorToken) || crypto.randomUUID();
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.isSpectator = true;
+    socket.data.spectatorToken = spectatorToken;
     socket.data.spectatorName = name;
-    room.spectators.set(socket.id, { name });
+    const existing = room.spectators.get(spectatorToken);
+    room.spectators.set(spectatorToken, { name: existing?.name || name, socketId: socket.id });
     broadcast(room);
-    reply({ ok: true, state: publicState(room), isSpectator: true });
+    reply({ ok: true, state: publicState(room), isSpectator: true, spectatorToken });
   });
 
   socket.on('rejoin-room', ({ code, token }, reply) => {
@@ -242,7 +245,7 @@ io.on('connection', (socket) => {
     socket.leave(room.code);
     socket.data.roomCode = undefined;
     if (socket.data.isSpectator) {
-      room.spectators.delete(socket.id);
+      room.spectators.delete(socket.data.spectatorToken);
       socket.data.isSpectator = false;
       broadcast(room);
       return reply({ ok: true });
@@ -276,7 +279,8 @@ io.on('connection', (socket) => {
     const room = getRoomFor(socket);
     if (!room) return;
     if (socket.data.isSpectator) {
-      room.spectators.delete(socket.id);
+      const spectator = room.spectators.get(socket.data.spectatorToken);
+      if (spectator?.socketId === socket.id) spectator.socketId = null;
       broadcast(room);
       return;
     }
