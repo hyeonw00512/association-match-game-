@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const { createHmac, randomUUID, timingSafeEqual } = require('node:crypto');
 const path = require('path');
 const topics = require('./topics.json');
 
@@ -37,6 +38,24 @@ function cleanToken(value) {
   return String(value || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 80);
 }
 
+function verifyPlatformJoinToken(token) {
+  const secret = process.env.PLATFORM_JOIN_SECRET;
+  if (!secret) throw new Error('플랫폼 자동 입장이 아직 설정되지 않았습니다.');
+  const [body, signature] = String(token || '').split('.');
+  if (!body || !signature) throw new Error('자동 입장 정보가 올바르지 않습니다.');
+  const expected = createHmac('sha256', secret).update(body).digest('base64url');
+  const received = Buffer.from(signature);
+  const valid = Buffer.from(expected);
+  if (received.length !== valid.length || !timingSafeEqual(received, valid)) throw new Error('자동 입장 정보가 만료되었거나 올바르지 않습니다.');
+  let payload;
+  try { payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); }
+  catch { throw new Error('자동 입장 정보를 읽을 수 없습니다.'); }
+  if (payload.gameId !== 'echo-words' || !payload.roomCode || !payload.nickname || Number(payload.exp) * 1000 <= Date.now()) {
+    throw new Error('자동 입장 정보가 만료되었거나 다른 게임용입니다.');
+  }
+  return payload;
+}
+
 function normalize(value) {
   return value.replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
 }
@@ -67,6 +86,35 @@ function getRoomFor(socket) {
 }
 
 io.on('connection', (socket) => {
+  socket.on('platform-join', ({ joinToken }, reply) => {
+    try {
+      const payload = verifyPlatformJoinToken(joinToken);
+      const room = rooms.get(String(payload.roomCode).toUpperCase());
+      if (!room) throw new Error('존재하지 않는 방 코드예요.');
+      const name = cleanName(payload.nickname);
+      if (!name) throw new Error('닉네임을 확인할 수 없어요.');
+      if (payload.mode === 'SPECTATOR') {
+        const spectatorToken = randomUUID();
+        socket.join(room.code);
+        socket.data.roomCode = room.code;
+        socket.data.isSpectator = true;
+        socket.data.spectatorToken = spectatorToken;
+        socket.data.spectatorName = name;
+        room.spectators.set(spectatorToken, { name, socketId: socket.id });
+        broadcast(room);
+        return reply({ ok: true, state: publicState(room), isSpectator: true, spectatorToken });
+      }
+      if (room.players.length >= room.maxPlayers || room.status !== 'waiting') throw new Error('현재는 플레이어로 입장할 수 없어요. 관전으로 참여해 주세요.');
+      const token = randomUUID();
+      room.players.push({ id: socket.id, name, token, connected: true });
+      socket.join(room.code);
+      socket.data.roomCode = room.code;
+      socket.data.playerToken = token;
+      socket.data.isSpectator = false;
+      broadcast(room);
+      reply({ ok: true, state: publicState(room), playerToken: token });
+    } catch (error) { reply({ ok: false, message: error.message || '자동 입장에 실패했어요.' }); }
+  });
   socket.on('create-room', ({ name, maxPlayers, token }, reply) => {
     name = cleanName(name);
     token = cleanToken(token) || socket.id;

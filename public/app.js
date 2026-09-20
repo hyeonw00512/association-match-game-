@@ -3,12 +3,14 @@ const $ = (selector) => document.querySelector(selector);
 let state = null;
 let myId = null;
 let isSpectator = false;
-const playerToken = sessionStorage.getItem('association-player-token') || crypto.randomUUID();
+let playerToken = sessionStorage.getItem('association-player-token') || crypto.randomUUID();
 const spectatorSessionKey = 'association-spectator-session';
 sessionStorage.setItem('association-player-token', playerToken);
 const categories = ['자연과 날씨', '음식과 음료', '동물과 식물', '장소와 여행', '일상과 물건', '취미와 놀이', '문화와 예술', '감정과 관계', '직업과 사회', '상상과 이야기'];
 categories.forEach((category) => { const option = document.createElement('option'); option.value = category; option.textContent = category; $('#category').append(option); });
 const invitedRoomCode = new URLSearchParams(location.search).get('room')?.trim().toUpperCase();
+const platformJoinToken = new URLSearchParams(location.search).get('joinToken');
+let platformJoinAttempted = false;
 if (/^[A-Z0-9]{6}$/.test(invitedRoomCode || '')) {
   $('#room-code').value = invitedRoomCode;
   $('#join').textContent = '초대 방 참가하기';
@@ -27,6 +29,19 @@ socket.on('connect', () => {
     if (result?.ok) { isSpectator = true; state = result.state; render(); }
     else sessionStorage.removeItem(spectatorSessionKey);
   });
+  if (!savedRoomCode && !spectatorSession && platformJoinToken && !platformJoinAttempted) {
+    platformJoinAttempted = true;
+    socket.emit('platform-join', { joinToken: platformJoinToken }, (result) => {
+      if (!result?.ok) return note(result?.message || '플랫폼 자동 입장에 실패했어요.');
+      state = result.state;
+      isSpectator = Boolean(result.isSpectator);
+      if (isSpectator) sessionStorage.setItem(spectatorSessionKey, JSON.stringify({ code: state.code, name: state.players.find((player) => player.id === myId)?.name || '관전자', spectatorToken: result.spectatorToken }));
+      else sessionStorage.setItem('association-room-code', state.code);
+      if (!isSpectator && result.playerToken) { playerToken = result.playerToken; sessionStorage.setItem('association-player-token', result.playerToken); }
+      history.replaceState(null, '', `?room=${state.code}`);
+      render();
+    });
+  }
 });
 socket.on('room-state', (next) => { state = next; render(); });
 socket.on('chat-message', (message) => {
