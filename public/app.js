@@ -10,8 +10,13 @@ const categories = ['자연과 날씨', '음식과 음료', '동물과 식물', 
 categories.forEach((category) => { const option = document.createElement('option'); option.value = category; option.textContent = category; $('#category').append(option); });
 const invitedRoomCode = new URLSearchParams(location.search).get('room')?.trim().toUpperCase();
 const platformJoinToken = new URLSearchParams(location.search).get('joinToken');
+const platformNickname = new URLSearchParams(location.search).get('platformNickname')?.trim() || '';
 const platformHomeUrl = () => new URLSearchParams(location.search).get('platformUrl') || document.referrer || '/';
 let platformJoinAttempted = false;
+if (platformNickname) {
+  $('#name').value = platformNickname.slice(0, 16);
+  $('#name').closest('label').hidden = true;
+}
 if (/^[A-Z0-9]{6}$/.test(invitedRoomCode || '')) {
   $('#room-code').value = invitedRoomCode;
   $('#join').textContent = '초대 방 참가하기';
