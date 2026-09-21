@@ -15,8 +15,8 @@ const platformHomeUrl = () => new URLSearchParams(location.search).get('platform
 const platformActivityToken = new URLSearchParams(location.search).get('platformActivityToken');
 let platformJoinAttempted = false;
 let lastPlatformActivity = '';
-function reportPlatformActivity(status) {
-  if (!platformActivityToken || lastPlatformActivity === status) return;
+function reportPlatformActivity(status, force = false) {
+  if (!platformActivityToken || (!force && lastPlatformActivity === status)) return;
   lastPlatformActivity = status;
   let endpoint;
   try { endpoint = new URL('/api/activity', platformHomeUrl()).toString(); } catch { return; }
@@ -141,6 +141,7 @@ function render() {
   $('#history').innerHTML = state.history.map((h) => `<div class="history-row"><strong>${h.round}R ${h.matched ? '✓ 정답' : ''}</strong><span class="history-prompt">제시어: ${(h.prompt || []).map((item) => escapeHtml(item.word)).join(' · ')}</span><span class="history-answer">${h.entries.map((e) => `${e.playerId === myId ? '내 단어' : `${escapeHtml(e.name)}의 단어`}: ${escapeHtml(e.word)}`).join(' · ')}</span></div>`).join('');
   renderChat();
 }
+window.setInterval(() => reportPlatformActivity(!state ? 'LOBBY' : isSpectator ? 'SPECTATING' : state.status === 'playing' ? 'PLAYING' : 'LOBBY', true), 45_000);
 function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
 function handle(result) { if (!result?.ok) note(result?.message || '오류가 발생했어요.'); else note(''); }
 
