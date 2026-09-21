@@ -81,6 +81,48 @@ function broadcast(room) {
   io.to(room.code).emit('room-state', publicState(room));
 }
 
+function resetForWaiting(room) {
+  room.status = 'waiting';
+  room.startWord = '';
+  room.round = 0;
+  room.history = [];
+  room.submissions = {};
+  room.result = null;
+}
+
+function finishRoundIfReady(room) {
+  if (room.status !== 'playing' || room.players.length < 2) return false;
+  if (Object.keys(room.submissions).length < room.players.length) return false;
+  const entries = room.players.map((player) => ({ playerId: player.id, name: player.name, word: room.submissions[player.id] }));
+  const matched = entries.every((entry) => normalize(entry.word) === normalize(entries[0].word));
+  const prompt = room.round === 1
+    ? [{ label: '시작 단어', word: room.startWord }]
+    : room.history[room.history.length - 1].entries.map((entry) => ({ label: entry.name, word: entry.word }));
+  room.history.push({ round: room.round, prompt, entries, matched });
+  room.result = { entries, matched };
+  room.submissions = {};
+  if (matched) room.status = 'won';
+  else room.round += 1;
+  io.to(room.code).emit('room-state', publicState(room, true));
+  return true;
+}
+
+function removePlayerAndContinue(room, token) {
+  const player = room.players.find((item) => item.token === token);
+  if (!player) return false;
+  room.players = room.players.filter((item) => item.token !== token);
+  delete room.submissions[player.id];
+  if (room.players.length === 0) {
+    rooms.delete(room.code);
+    return true;
+  }
+  if (room.hostId === player.id) room.hostId = room.players[0].id;
+  if (room.status === 'playing' && room.players.length < 2) resetForWaiting(room);
+  else finishRoundIfReady(room);
+  broadcast(room);
+  return true;
+}
+
 function getRoomFor(socket) {
   return rooms.get(socket.data.roomCode);
 }
@@ -245,21 +287,7 @@ io.on('connection', (socket) => {
       broadcast(room);
       return reply({ ok: true });
     }
-    const entries = room.players.map((player) => ({ playerId: player.id, name: player.name, word: room.submissions[player.id] }));
-    const matched = entries.every((entry) => normalize(entry.word) === normalize(entries[0].word));
-    const prompt = room.round === 1
-      ? [{ label: '시작 단어', word: room.startWord }]
-      : room.history[room.history.length - 1].entries.map((entry) => ({ label: entry.name, word: entry.word }));
-    room.history.push({ round: room.round, prompt, entries, matched });
-    room.result = { entries, matched };
-    room.submissions = {};
-    if (matched) {
-      room.status = 'won';
-    } else {
-      room.round += 1;
-      room.status = 'playing';
-    }
-    io.to(room.code).emit('room-state', publicState(room, true));
+    finishRoundIfReady(room);
     reply({ ok: true });
   });
 
@@ -299,14 +327,7 @@ io.on('connection', (socket) => {
       return reply({ ok: true });
     }
     if (!player) return reply({ ok: true });
-    room.players = room.players.filter((item) => item.id !== socket.id);
-    delete room.submissions[socket.id];
-    if (room.players.length === 0) rooms.delete(room.code);
-    else {
-      room.hostId = room.hostId === socket.id ? room.players[0].id : room.hostId;
-      if (room.status === 'playing') { room.status = 'waiting'; room.startWord = ''; room.round = 0; room.history = []; room.submissions = {}; room.result = null; }
-      broadcast(room);
-    }
+    removePlayerAndContinue(room, player.token);
     reply({ ok: true });
   });
 
@@ -339,16 +360,7 @@ io.on('connection', (socket) => {
       const currentRoom = rooms.get(room.code);
       const absentPlayer = currentRoom?.players.find((p) => p.token === player.token);
       if (!currentRoom || !absentPlayer || absentPlayer.connected) return;
-      currentRoom.players = currentRoom.players.filter((p) => p.token !== player.token);
-      if (currentRoom.players.length === 0) return rooms.delete(currentRoom.code);
-      currentRoom.hostId = currentRoom.players[0].id;
-      currentRoom.status = 'waiting';
-      currentRoom.startWord = '';
-      currentRoom.round = 0;
-      currentRoom.history = [];
-      currentRoom.submissions = {};
-      currentRoom.result = null;
-      broadcast(currentRoom);
+      removePlayerAndContinue(currentRoom, player.token);
     }, 30000);
   });
 });
