@@ -20,28 +20,29 @@ if (/^[A-Z0-9]{6}$/.test(invitedRoomCode || '')) {
 socket.on('connect', () => {
   myId = socket.id;
   const savedRoomCode = sessionStorage.getItem('association-room-code');
-  if (savedRoomCode) socket.emit('rejoin-room', { code: savedRoomCode, token: playerToken }, (result) => {
-    if (result?.ok) { state = result.state; render(); }
-    else sessionStorage.removeItem('association-room-code');
-  });
   const spectatorSession = JSON.parse(sessionStorage.getItem(spectatorSessionKey) || 'null');
-  if (!savedRoomCode && spectatorSession) socket.emit('spectate-room', spectatorSession, (result) => {
-    if (result?.ok) { isSpectator = true; state = result.state; render(); }
-    else sessionStorage.removeItem(spectatorSessionKey);
-  });
-  if (!savedRoomCode && !spectatorSession && platformJoinToken && !platformJoinAttempted) {
+  if (platformJoinToken && !platformJoinAttempted) {
     platformJoinAttempted = true;
+    sessionStorage.removeItem('association-room-code');
+    sessionStorage.removeItem(spectatorSessionKey);
     socket.emit('platform-join', { joinToken: platformJoinToken }, (result) => {
       if (!result?.ok) return note(result?.message || '플랫폼 자동 입장에 실패했어요.');
       state = result.state;
       isSpectator = Boolean(result.isSpectator);
-      if (isSpectator) sessionStorage.setItem(spectatorSessionKey, JSON.stringify({ code: state.code, name: state.players.find((player) => player.id === myId)?.name || '관전자', spectatorToken: result.spectatorToken }));
+      if (isSpectator) sessionStorage.setItem(spectatorSessionKey, JSON.stringify({ code: state.code, name: '관전자', spectatorToken: result.spectatorToken }));
       else sessionStorage.setItem('association-room-code', state.code);
       if (!isSpectator && result.playerToken) { playerToken = result.playerToken; sessionStorage.setItem('association-player-token', result.playerToken); }
       history.replaceState(null, '', `?room=${state.code}`);
       render();
     });
-  }
+  } else if (savedRoomCode) socket.emit('rejoin-room', { code: savedRoomCode, token: playerToken }, (result) => {
+    if (result?.ok) { state = result.state; render(); }
+    else sessionStorage.removeItem('association-room-code');
+  });
+  else if (spectatorSession) socket.emit('spectate-room', spectatorSession, (result) => {
+    if (result?.ok) { isSpectator = true; state = result.state; render(); }
+    else sessionStorage.removeItem(spectatorSessionKey);
+  });
 });
 socket.on('room-state', (next) => { state = next; render(); });
 socket.on('chat-message', (message) => {
