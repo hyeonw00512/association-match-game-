@@ -12,7 +12,16 @@ const invitedRoomCode = new URLSearchParams(location.search).get('room')?.trim()
 const platformJoinToken = new URLSearchParams(location.search).get('joinToken');
 const platformNickname = new URLSearchParams(location.search).get('platformNickname')?.trim() || '';
 const platformHomeUrl = () => new URLSearchParams(location.search).get('platformUrl') || document.referrer || '/';
+const platformActivityToken = new URLSearchParams(location.search).get('platformActivityToken');
 let platformJoinAttempted = false;
+let lastPlatformActivity = '';
+function reportPlatformActivity(status) {
+  if (!platformActivityToken || lastPlatformActivity === status) return;
+  lastPlatformActivity = status;
+  let endpoint;
+  try { endpoint = new URL('/api/activity', platformHomeUrl()).toString(); } catch { return; }
+  fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: platformActivityToken, status }), keepalive: true }).catch(() => { lastPlatformActivity = ''; });
+}
 if (platformNickname) {
   $('#name').value = platformNickname.slice(0, 16);
   $('#name').closest('label').hidden = true;
@@ -89,7 +98,8 @@ function renderChat() {
 }
 
 function render() {
-  if (!state) return;
+  if (!state) { reportPlatformActivity('LOBBY'); return; }
+  reportPlatformActivity(isSpectator ? 'SPECTATING' : state.status === 'playing' ? 'PLAYING' : 'LOBBY');
   $('#lobby').classList.add('hidden'); $('#game').classList.remove('hidden');
   const isWaiting = state.status === 'waiting';
   $('#code-display').textContent = state.code;
