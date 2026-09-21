@@ -10,6 +10,7 @@ const categories = ['자연과 날씨', '음식과 음료', '동물과 식물', 
 categories.forEach((category) => { const option = document.createElement('option'); option.value = category; option.textContent = category; $('#category').append(option); });
 const invitedRoomCode = new URLSearchParams(location.search).get('room')?.trim().toUpperCase();
 const platformJoinToken = new URLSearchParams(location.search).get('joinToken');
+const platformHomeUrl = () => new URLSearchParams(location.search).get('platformUrl') || document.referrer || '/';
 let platformJoinAttempted = false;
 if (/^[A-Z0-9]{6}$/.test(invitedRoomCode || '')) {
   $('#room-code').value = invitedRoomCode;
@@ -146,6 +147,7 @@ $('#copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(inviteLink); note('초대 링크가 복사됐어요. 친구에게 보내세요!'); }
   catch { note(`초대 링크: ${inviteLink}`); }
 });
+$('#platform-home').addEventListener('click', () => window.location.assign(platformHomeUrl()));
 $('#chat-send').addEventListener('click', async () => { const r = await call('send-chat', { message: $('#chat-input').value }); handle(r); if (r.ok) $('#chat-input').value = ''; });
 $('#cancel-room').addEventListener('click', async () => { if (!confirm('이 방을 취소할까요? 참가자 모두 대기 화면으로 돌아갑니다.')) return; const r = await call('cancel-room'); handle(r); if (r.ok) { state = null; sessionStorage.removeItem('association-room-code'); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note('방을 취소했어요.'); } });
 $('#leave-room').addEventListener('click', async () => { if (!confirm('방에서 나갈까요?')) return; const r = await call('leave-room'); if (!r?.ok) return handle(r); state = null; isSpectator = false; sessionStorage.removeItem('association-room-code'); sessionStorage.removeItem(spectatorSessionKey); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note('방에서 나왔어요.'); });
