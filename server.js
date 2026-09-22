@@ -174,7 +174,7 @@ io.on('connection', (socket) => {
       submissions: {},
       result: null,
       chat: [],
-      spectators: new Set(),
+      spectators: new Map(),
       usedTopics: []
     };
     rooms.set(code, room);
@@ -207,7 +207,7 @@ io.on('connection', (socket) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     if (!room) return reply({ ok: false, message: '존재하지 않는 방 코드예요.' });
     name = cleanName(name) || '관전자';
-    spectatorToken = cleanToken(spectatorToken) || crypto.randomUUID();
+    spectatorToken = cleanToken(spectatorToken) || randomUUID();
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.isSpectator = true;
