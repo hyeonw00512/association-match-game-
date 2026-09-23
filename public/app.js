@@ -15,13 +15,16 @@ const platformHomeUrl = () => new URLSearchParams(location.search).get('platform
 const platformActivityToken = new URLSearchParams(location.search).get('platformActivityToken');
 let platformJoinAttempted = false;
 let lastPlatformActivity = '';
-function reportPlatformActivity(status, force = false) {
+  function reportPlatformActivity(status, force = false) {
   if (!platformActivityToken || (!force && lastPlatformActivity === status)) return;
   lastPlatformActivity = status;
   let endpoint;
   try { endpoint = new URL('/api/activity', platformHomeUrl()).toString(); } catch { return; }
-  fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: platformActivityToken, status }), keepalive: true }).catch(() => { lastPlatformActivity = ''; });
-}
+    fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: platformActivityToken, status }), keepalive: true }).catch(() => { lastPlatformActivity = ''; });
+  }
+  // `pagehide` also runs on mobile browser/app transitions. keepalive allows
+  // this final status message to outlive the page that sends it.
+  window.addEventListener('pagehide', () => reportPlatformActivity('OFFLINE', true));
 if (platformNickname) {
   $('#name').value = platformNickname.slice(0, 16);
   $('#name').closest('label').hidden = true;
