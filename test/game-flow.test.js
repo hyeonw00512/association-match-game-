@@ -40,6 +40,16 @@ function ask(socket, event, payload = {}) {
   });
 }
 
+function askWithoutPayload(socket, event) {
+  return new Promise((resolve, reject) => {
+    socket.timeout(3_000).emit(event, (error, response) => {
+      if (error) return reject(new Error(`${event}: ${error.message}\n${serverError}`));
+      if (!response) return reject(new Error(`${event} did not return an acknowledgement.`));
+      resolve(response);
+    });
+  });
+}
+
 function once(socket, event) {
   return new Promise((resolve) => socket.once(event, resolve));
 }
@@ -99,4 +109,31 @@ test('room flow protects turns and allows a tokenless spectator to chat after a 
   const chat = once(host, 'chat-message');
   assert.equal((await ask(spectator, 'send-chat', { message: '축하합니다!' })).ok, true);
   assert.equal((await chat).message, '축하합니다!');
+});
+
+test('a reconnect keeps a submitted word, and a three-player round continues when one player leaves', async () => {
+  const host = await connect();
+  const guest = await connect();
+  const third = await connect();
+  const created = await ask(host, 'create-room', { name: '방장', token: 'reconnect-host', maxPlayers: 3 });
+  const code = created.state.code;
+  assert.equal((await ask(guest, 'join-room', { code, name: '참가자', token: 'reconnect-guest' })).ok, true);
+  assert.equal((await ask(third, 'join-room', { code, name: '세번째', token: 'reconnect-third' })).ok, true);
+
+  assert.equal((await ask(host, 'set-start-word', { word: '여행' })).ok, true);
+  assert.equal((await ask(host, 'submit-word', { word: '바다' })).ok, true);
+
+  host.disconnect();
+  const reconnectedHost = await connect();
+  const restored = await ask(reconnectedHost, 'rejoin-room', { code, token: 'reconnect-host' });
+  assert.equal(restored.ok, true);
+  assert.equal(restored.state.submittedIds.length, 1);
+
+  assert.equal((await ask(guest, 'submit-word', { word: '바다' })).ok, true);
+  const finalState = once(reconnectedHost, 'room-state');
+  assert.equal((await askWithoutPayload(third, 'leave-room')).ok, true);
+  const result = await finalState;
+  assert.equal(result.status, 'won');
+  assert.equal(result.result.matched, true);
+  assert.equal(result.players.length, 2);
 });
