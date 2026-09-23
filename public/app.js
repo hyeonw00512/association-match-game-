@@ -66,6 +66,9 @@ socket.on('chat-message', (message) => {
   renderChat();
 });
 socket.on('room-cancelled', ({ message }) => { state = null; sessionStorage.removeItem('association-room-code'); $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden'); note(message); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !socket.connected) socket.connect();
+});
 
 function note(message = '') { $('#notice').textContent = message; }
 function roomCodeFrom(value) {
